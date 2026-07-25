@@ -341,7 +341,9 @@
     player.x = clamp(player.x + dx*speed*dt, 28, W-28);
     player.y = clamp(player.y + dy*speed*dt, 40, H-32);
     if (innerWidth <= 800) {
-      player.angle = Math.atan2(mobileAim.y, mobileAim.x);
+      const target = nearestEnemy(player);
+      if (target) player.angle = angleTo(player, target);
+      else player.angle = Math.atan2(mobileAim.y, mobileAim.x);
     } else player.angle = Math.atan2(pointer.y-player.y,pointer.x-player.x);
     if (player.fireTimer <= 0 && enemies.some(e=>!e.dead)) fire();
 
