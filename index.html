@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050a10">
+  <title>Technomancer: Ulysses Protocol</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="game-shell">
+    <canvas id="game" width="1280" height="720" aria-label="Technomancer game arena"></canvas>
+
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+
+    <section id="hud" class="hud hidden" aria-live="polite">
+      <div class="hud-left">
+        <div class="identity">
+          <div class="avatar"><span>TM</span></div>
+          <div>
+            <small>OPERATOR</small>
+            <strong>TECHNOMANCER</strong>
+          </div>
+        </div>
+        <div class="meter health"><i id="healthFill"></i><span id="healthText">100 / 100</span></div>
+        <div class="meter xp"><i id="xpFill"></i><span id="levelText">LEVEL 1</span></div>
+      </div>
+
+      <div class="wave-panel">
+        <small>THREAT CYCLE</small>
+        <strong id="waveText">WAVE 01</strong>
+        <span id="enemyText">12 HOSTILES</span>
+      </div>
+
+      <div class="hud-right">
+        <div class="parts-counter"><span class="part-icon">◆</span><div><small>SCAVENGED</small><strong id="partsText">0 PARTS</strong></div></div>
+        <button id="pauseBtn" class="icon-button" aria-label="Pause game">Ⅱ</button>
+      </div>
+
+      <div id="bossBar" class="boss-bar hidden">
+        <div><span>CLASS-OMEGA MACHINE</span><strong>IRON BEHEMOTH</strong></div>
+        <div class="meter"><i id="bossFill"></i></div>
+      </div>
+
+      <div id="weaponDock" class="weapon-dock"></div>
+      <button id="upgradePrompt" class="upgrade-prompt hidden">
+        <span>UPGRADE READY</span>
+        <strong>PRESS <kbd>E</kbd> TO INSTALL</strong>
+      </button>
+      <div class="controls-hint"><kbd>WASD</kbd> MOVE <b>•</b> <kbd>MOUSE</kbd> AIM <b>•</b> AUTO-FIRE <b>•</b> <kbd>1–5</kbd> SWITCH</div>
+    </section>
+
+    <section id="menu" class="screen menu-screen">
+      <div class="menu-copy">
+        <div class="eyebrow"><span></span> YEAR 2147 // ULYSSES PROTOCOL <span></span></div>
+        <h1>TECHNO<span>MANCER</span></h1>
+        <p class="tagline">THE MACHINES ENDED OUR WORLD.<br><em>NOW MAKE THEM BUILD YOURS.</em></p>
+        <div class="menu-actions">
+          <button id="startBtn" class="primary-button"><span>INITIATE RUN</span><small>ENTER THE ABANDONED CITY</small></button>
+          <button id="baseBtn" class="secondary-button"><span>UNDERGROUND BASE</span><small id="bankText">0 PARTS AVAILABLE</small></button>
+        </div>
+        <div class="build-tag">PROTOTYPE BUILD // ABANDONED CITY</div>
+      </div>
+      <aside class="intel-card">
+        <div class="intel-head"><span>THREAT INTELLIGENCE</span><i>LIVE</i></div>
+        <div class="boss-sigil">IB<div class="rings"></div></div>
+        <h2>IRON BEHEMOTH</h2>
+        <p>U.L.Y.S.S.E.S. SIEGE PLATFORM</p>
+        <ul>
+          <li><span>ARMOR</span><b>██████████</b></li>
+          <li><span>THREAT</span><b>OMEGA</b></li>
+          <li><span>LOCATION</span><b>SECTOR 07</b></li>
+        </ul>
+        <div class="warning">⚠ SURVIVE 5 WAVES TO ENGAGE</div>
+      </aside>
+    </section>
+
+    <section id="upgradeScreen" class="screen modal-screen hidden">
+      <div class="upgrade-wrap">
+        <div class="eyebrow"><span></span> NEURAL CAPACITY INCREASED <span></span></div>
+        <h2>SYSTEM <em>UPGRADE</em></h2>
+        <p>Choose one modification. The others will be scrapped.</p>
+        <div id="upgradeCards" class="upgrade-cards"></div>
+      </div>
+    </section>
+
+    <section id="baseScreen" class="screen modal-screen hidden">
+      <div class="base-panel">
+        <button id="closeBase" class="close-button">×</button>
+        <div class="eyebrow"><span></span> SUBLEVEL 12 // SAFEHOUSE <span></span></div>
+        <h2>UNDERGROUND <em>BASE</em></h2>
+        <p>Permanent systems persist between runs.</p>
+        <div class="base-balance"><span class="part-icon">◆</span><strong id="baseParts">0</strong><small> PARTS</small></div>
+        <div id="baseUpgrades" class="base-grid"></div>
+      </div>
+    </section>
+
+    <section id="pauseScreen" class="screen modal-screen hidden">
+      <div class="pause-card">
+        <div class="eyebrow"><span></span> SYSTEM SUSPENDED <span></span></div>
+        <h2>PAUSED</h2>
+        <button id="resumeBtn" class="primary-button"><span>RESUME RUN</span></button>
+        <button id="quitBtn" class="secondary-button"><span>ABORT TO BASE</span></button>
+      </div>
+    </section>
+
+    <section id="resultScreen" class="screen modal-screen hidden">
+      <div class="result-card">
+        <div id="resultEyebrow" class="eyebrow"><span></span> SIGNAL LOST <span></span></div>
+        <h2 id="resultTitle">RUN <em>TERMINATED</em></h2>
+        <p id="resultCopy">Your chassis failed. Your data survived.</p>
+        <div class="result-stats">
+          <div><small>WAVES</small><strong id="statWaves">0</strong></div>
+          <div><small>MACHINES</small><strong id="statKills">0</strong></div>
+          <div><small>PARTS BANKED</small><strong id="statParts">0</strong></div>
+        </div>
+        <button id="againBtn" class="primary-button"><span>REINITIALIZE</span><small>START ANOTHER RUN</small></button>
+        <button id="returnBtn" class="secondary-button"><span>RETURN TO BASE</span></button>
+      </div>
+    </section>
+
+    <div id="toast" class="toast"></div>
+    <div id="mobileControls" class="mobile-controls hidden">
+      <div id="joystick" class="joystick move-joystick"><i></i><span>MOVE + AIM</span></div>
+      <button id="dashBtn" class="dash-button">DASH</button>
+    </div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
