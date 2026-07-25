@@ -8,6 +8,92 @@
   const bg = new Image();
   bg.src = "assets/abandoned-city.png";
 
+  const audio = {
+    ctx: null,
+    master: null,
+    muted: localStorage.getItem("technomancer-muted") === "true",
+    noiseBuffer: null,
+    unlock() {
+      if (!this.ctx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        this.ctx = new AudioCtx();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = this.muted ? 0 : .55;
+        this.master.connect(this.ctx.destination);
+        const length = Math.floor(this.ctx.sampleRate * .5);
+        this.noiseBuffer = this.ctx.createBuffer(1, length, this.ctx.sampleRate);
+        const data = this.noiseBuffer.getChannelData(0);
+        for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+      }
+      if (this.ctx.state === "suspended") this.ctx.resume();
+      this.updateButton();
+    },
+    updateButton() {
+      const btn = $("#soundBtn");
+      if (!btn) return;
+      btn.textContent = this.muted ? "×" : "◖";
+      btn.setAttribute("aria-label", this.muted ? "Enable sound" : "Mute sound");
+    },
+    toggle() {
+      this.unlock();
+      this.muted = !this.muted;
+      localStorage.setItem("technomancer-muted", this.muted);
+      if (this.master) this.master.gain.setTargetAtTime(this.muted ? 0 : .55, this.ctx.currentTime, .015);
+      this.updateButton();
+      if (!this.muted) this.tone(620, .07, "square", .08, 850);
+    },
+    tone(freq, duration=.08, type="square", volume=.05, endFreq=freq, delay=0) {
+      if (!this.ctx || this.muted) return;
+      const now = this.ctx.currentTime + delay;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(Math.max(20, freq), now);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), now + duration);
+      gain.gain.setValueAtTime(volume, now);
+      gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
+      osc.connect(gain); gain.connect(this.master);
+      osc.start(now); osc.stop(now + duration + .01);
+    },
+    noise(duration=.1, volume=.04, filterFreq=900, delay=0) {
+      if (!this.ctx || this.muted || !this.noiseBuffer) return;
+      const now = this.ctx.currentTime + delay;
+      const source = this.ctx.createBufferSource();
+      const filter = this.ctx.createBiquadFilter();
+      const gain = this.ctx.createGain();
+      source.buffer = this.noiseBuffer;
+      filter.type = "lowpass";
+      filter.frequency.value = filterFreq;
+      gain.gain.setValueAtTime(volume, now);
+      gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
+      source.connect(filter); filter.connect(gain); gain.connect(this.master);
+      source.start(now); source.stop(now + duration);
+    },
+    play(name) {
+      if (!this.ctx || this.muted) return;
+      const sounds = {
+        blaster: () => { this.tone(310,.055,"square",.025,145); this.tone(920,.035,"sine",.018,480); },
+        shotgun: () => { this.noise(.14,.075,1500); this.tone(125,.12,"sawtooth",.035,58); },
+        tesla: () => { this.tone(1250,.06,"sawtooth",.025,420); this.tone(780,.1,"square",.018,1300,.035); },
+        rocket: () => { this.noise(.18,.07,650); this.tone(92,.2,"sawtooth",.05,38); },
+        drone: () => this.tone(740,.055,"triangle",.025,1050),
+        kill: () => { this.noise(.1,.035,850); this.tone(105,.09,"square",.02,55); },
+        bossKill: () => { this.noise(.45,.12,1000); this.tone(85,.55,"sawtooth",.09,24); this.tone(420,.45,"square",.045,62,.12); },
+        hurt: () => { this.noise(.13,.08,500); this.tone(155,.18,"sawtooth",.05,62); },
+        pickup: () => { this.tone(540,.045,"sine",.02,760); this.tone(820,.055,"sine",.018,1080,.045); },
+        ready: () => { this.tone(440,.08,"square",.035,660); this.tone(660,.11,"square",.035,990,.09); },
+        upgrade: () => { [330,495,660,990].forEach((f,i)=>this.tone(f,.12,"triangle",.035,f*1.18,i*.065)); },
+        wave: () => { this.tone(145,.18,"sawtooth",.04,220); this.tone(290,.2,"square",.03,430,.1); },
+        clear: () => { [392,523,659].forEach((f,i)=>this.tone(f,.2,"triangle",.035,f*1.08,i*.09)); },
+        dash: () => { this.noise(.11,.035,2200); this.tone(210,.11,"sine",.03,720); },
+        ui: () => this.tone(600,.045,"square",.025,780),
+        defeat: () => { this.tone(220,.35,"sawtooth",.05,70); this.tone(105,.5,"sine",.05,32,.18); }
+      };
+      if (sounds[name]) sounds[name]();
+    }
+  };
+
   const screens = {
     menu: $("#menu"), hud: $("#hud"), upgrade: $("#upgradeScreen"),
     base: $("#baseScreen"), pause: $("#pauseScreen"), result: $("#resultScreen")
@@ -70,6 +156,8 @@
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
   function startGame() {
+    audio.unlock();
+    audio.play("ui");
     const maxHp = 100 + profile.upgrades.vitality * 10;
     run = { wave: 0, level: 1, xp: 0, xpNeed: 60, pendingUpgrades: 0, kills: 0, parts: 0, spawnLeft: 0, spawning: false, waveDelay: 1.2, waveCleared: false, bossSpawned: false };
     player = {
@@ -94,11 +182,13 @@
       run.spawnLeft = 0;
       spawnBoss();
       toast("⚠ OMEGA SIGNAL DETECTED");
+      audio.play("wave");
     } else {
       run.spawnLeft = 7 + run.wave * 4;
       run.spawning = true;
       run.spawnTimer = .2;
       toast(`WAVE 0${run.wave} // INCOMING`);
+      audio.play("wave");
     }
     updateHUD();
   }
@@ -143,6 +233,7 @@
     const w = weaponDefs[player.activeWeapon];
     if (!player.unlocked[player.activeWeapon]) return;
     player.fireTimer = w.rate / player.rate;
+    audio.play(w.id);
     const a = player.angle;
     if (w.id === "shotgun") {
       for (let i = -2; i <= 2; i++) makeBullet(a + i * .115 + rand(-.03,.03), w, 1, 1.1);
@@ -201,6 +292,7 @@
     run.kills++;
     shake = e.type === "boss" ? 20 : Math.max(shake, e.r*.18);
     burst(e.x,e.y,e.color,e.type==="boss"?70:16,e.type==="boss"?6:3);
+    audio.play(e.type === "boss" ? "bossKill" : "kill");
     pickups.push({ x:e.x+rand(-8,8), y:e.y+rand(-8,8), type:"xp", value:e.xp, r:5, color:"#49eaff" });
     const salvage = Math.ceil(e.parts*(1+profile.upgrades.salvage*.1));
     if (Math.random() < .75 || e.type === "boss") pickups.push({ x:e.x+rand(-10,10), y:e.y+rand(-10,10), type:"part", value:salvage, r:6, color:"#ffb34c" });
@@ -214,6 +306,7 @@
     player.invuln = .55;
     shake = 9;
     burst(player.x, player.y, "#ff3957", 12, 4);
+    audio.play("hurt");
     if (player.hp <= 0) finishRun(false);
   }
 
@@ -225,6 +318,7 @@
       run.pendingUpgrades++;
       run.xpNeed = Math.round(run.xpNeed * 1.38);
       toast("UPGRADE READY // PRESS E");
+      audio.play("ready");
     }
     updateUpgradePrompt();
   }
@@ -275,6 +369,7 @@
       screens.hud.classList.remove("hidden");
       state = "running";
       toast(`${u.name.toUpperCase()} INSTALLED`);
+      audio.play("upgrade");
       updateUpgradePrompt();
       updateHUD();
     });
@@ -310,6 +405,7 @@
     state = "result";
     profile.parts += run.parts;
     save();
+    if (!victory) audio.play("defeat");
     showOnly("result");
     $("#mobileControls").classList.add("hidden");
     $("#resultTitle").innerHTML = victory ? "PROTOCOL <em>BREACHED</em>" : "RUN <em>TERMINATED</em>";
@@ -403,7 +499,7 @@
     for (const p of pickups) {
       const d=dist(p,player);
       if(d<player.magnet){const a=angleTo(p,player);p.x+=Math.cos(a)*Math.max(180,500-d)*dt;p.y+=Math.sin(a)*Math.max(180,500-d)*dt;}
-      if(d<player.r+p.r+5){if(p.type==="xp")addXp(p.value);else{run.parts+=p.value;texts.push({x:p.x,y:p.y,text:`+${p.value} PARTS`,color:"#ffb24b",life:.8,vy:-25});}p.dead=true;}
+      if(d<player.r+p.r+5){if(p.type==="xp")addXp(p.value);else{run.parts+=p.value;texts.push({x:p.x,y:p.y,text:`+${p.value} PARTS`,color:"#ffb24b",life:.8,vy:-25});audio.play("pickup");}p.dead=true;}
     }
     pickups=pickups.filter(p=>!p.dead);
     for(const p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.94;p.vy*=.94;p.life-=dt;}
@@ -421,6 +517,7 @@
         texts.push({x:player.x,y:player.y-35,text:"+15% MAX INTEGRITY",color:"#63ffae",life:1.4,vy:-18});
         burst(player.x,player.y,"#63ffae",22,2);
         toast(`WAVE 0${run.wave} CLEARED // +15% MAX INTEGRITY`);
+        audio.play("clear");
       }
       run.waveDelay-=dt;
       if(run.waveDelay<=0){run.waveDelay=1.5;beginWave();}
@@ -540,6 +637,7 @@
   $("#returnBtn").onclick=()=>{state="menu";showOnly("menu");$("#bossBar").classList.add("hidden");};
   $("#closeBase").onclick=()=>{state="menu";showOnly("menu");};
   $("#pauseBtn").onclick=()=>{if(state==="running"){state="paused";screens.pause.classList.remove("hidden");screens.hud.classList.add("hidden");}};
+  $("#soundBtn").onclick=()=>audio.toggle();
   $("#resumeBtn").onclick=()=>{state="running";screens.pause.classList.add("hidden");screens.hud.classList.remove("hidden");last=performance.now();};
   $("#quitBtn").onclick=abortRun;
   addEventListener("keydown",e=>{
@@ -551,7 +649,7 @@
   });
   addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
   canvas.addEventListener("pointermove",e=>{const r=canvas.getBoundingClientRect();pointer.x=(e.clientX-r.left)/r.width*W;pointer.y=(e.clientY-r.top)/r.height*H;});
-  function dash(){if(state==="running"&&player.dashCd<=0){player.dash=.16;player.dashCd=1.5;burst(player.x,player.y,"#48eaff",14,2);}}
+  function dash(){if(state==="running"&&player.dashCd<=0){player.dash=.16;player.dashCd=1.5;burst(player.x,player.y,"#48eaff",14,2);audio.play("dash");}}
   $("#dashBtn").onclick=dash;
   $("#upgradePrompt").onclick=openPendingUpgrade;
   function bindStick(element, input) {
@@ -577,6 +675,8 @@
   }
   bindStick($("#joystick"), joystick);
   addEventListener("blur",()=>{if(state==="running")$("#pauseBtn").click();});
+  addEventListener("pointerdown",()=>audio.unlock(),{once:true});
   updateBank();
+  audio.updateButton();
   if (new URLSearchParams(location.search).has("play")) startGame();
 })();
